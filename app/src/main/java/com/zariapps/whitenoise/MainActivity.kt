@@ -289,8 +289,8 @@ fun WhiteNoiseApp() {
         ) {
             // Header
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("🌙  White Noise", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Sleep sounds & relaxation", color = TextSecondary, fontSize = 13.sp)
+                Text("🌙  Lull", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("Sleep Sounds & White Noise", color = TextSecondary, fontSize = 13.sp)
             }
 
             // Sound grid
