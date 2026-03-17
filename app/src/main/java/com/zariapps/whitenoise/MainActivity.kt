@@ -1,5 +1,6 @@
 package com.zariapps.whitenoise
 
+import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -30,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,15 +41,45 @@ import kotlinx.coroutines.launch
 import kotlin.math.*
 import kotlin.random.Random
 
-// ── Colors ─────────────────────────────────────────────────────────────────
-private val BgColor         = Color(0xFF060B1A)
-private val SurfaceColor    = Color(0xFF0D1830)
-private val SurfaceSelected = Color(0xFF142A4A)
-private val AccentColor     = Color(0xFF4DA8FF)
-private val AccentDark      = Color(0xFF1A5FA8)
-private val TextPrimary     = Color(0xFFCCDFFF)
-private val TextSecondary   = Color(0xFF5A7299)
-private val BorderSelected  = Color(0xFF3D8BE0)
+// ── Theme colors ─────────────────────────────────────────
+
+data class AppColors(
+    val bgColor: Color,
+    val bgGradientMid: Color,
+    val surfaceColor: Color,
+    val surfaceSelected: Color,
+    val accentColor: Color,
+    val accentDark: Color,
+    val textPrimary: Color,
+    val textSecondary: Color,
+    val borderSelected: Color,
+)
+
+val darkColors = AppColors(
+    bgColor         = Color(0xFF060B1A),
+    bgGradientMid   = Color(0xFF080E20),
+    surfaceColor    = Color(0xFF0D1830),
+    surfaceSelected = Color(0xFF142A4A),
+    accentColor     = Color(0xFF4DA8FF),
+    accentDark      = Color(0xFF1A5FA8),
+    textPrimary     = Color(0xFFCCDFFF),
+    textSecondary   = Color(0xFF5A7299),
+    borderSelected  = Color(0xFF3D8BE0),
+)
+
+val lightColors = AppColors(
+    bgColor         = Color(0xFFF0F5FF),
+    bgGradientMid   = Color(0xFFE8F0FF),
+    surfaceColor    = Color(0xFFFFFFFF),
+    surfaceSelected = Color(0xFFDCEBFF),
+    accentColor     = Color(0xFF1A6BB8),
+    accentDark      = Color(0xFF0D4A8A),
+    textPrimary     = Color(0xFF0D1A40),
+    textSecondary   = Color(0xFF4A6080),
+    borderSelected  = Color(0xFF3D8BE0),
+)
+
+val LocalColors = compositionLocalOf { darkColors }
 
 // ── Sound types ────────────────────────────────────────────────────────────
 enum class SoundType(val label: String, val icon: String, val description: String) {
@@ -225,16 +257,54 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { WhiteNoiseApp() }
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val savedDark = prefs.getBoolean("is_dark", false)
+        setContent { LullApp(initialDark = savedDark) }
+    }
+}
+
+@Composable
+fun LullApp(initialDark: Boolean) {
+    val context = LocalContext.current
+    var isDark by remember { mutableStateOf(initialDark) }
+    val colors = if (isDark) darkColors else lightColors
+
+    fun toggleTheme() {
+        isDark = !isDark
+        context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("is_dark", isDark).apply()
+    }
+
+    CompositionLocalProvider(LocalColors provides colors) {
+        WhiteNoiseApp(isDark = isDark, onToggleTheme = ::toggleTheme)
+    }
+}
+
+// ── Theme toggle ─────────────────────────────────────────
+
+@Composable
+fun ThemeToggle(isDark: Boolean, onToggle: () -> Unit) {
+    val c = LocalColors.current
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(c.surfaceColor)
+            .border(1.dp, c.borderSelected.copy(alpha = 0.3f), CircleShape)
+            .clickable(onClick = onToggle),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(if (isDark) "☀" else "☾", fontSize = 18.sp)
     }
 }
 
 // ── Timer options ─────────────────────────────────────────────────────────
-private val TIMER_OPTIONS = listOf(0, 15, 30, 45, 60, 120) // minutes; 0 = off
+private val TIMER_OPTIONS = listOf(0, 15, 30, 45, 60, 120)
 
 // ── Root composable ───────────────────────────────────────────────────────
 @Composable
-fun WhiteNoiseApp() {
+fun WhiteNoiseApp(isDark: Boolean, onToggleTheme: () -> Unit) {
+    val c = LocalColors.current
     val engine    = remember { SoundEngine() }
     val scope     = rememberCoroutineScope()
 
@@ -242,9 +312,8 @@ fun WhiteNoiseApp() {
     var isPlaying by remember { mutableStateOf(false) }
     var volume    by remember { mutableFloatStateOf(0.7f) }
     var timerMin  by remember { mutableIntStateOf(0) }
-    var remaining by remember { mutableIntStateOf(0) } // seconds
+    var remaining by remember { mutableIntStateOf(0) }
 
-    // Timer countdown
     LaunchedEffect(isPlaying, remaining) {
         if (isPlaying && remaining > 0) {
             delay(1000)
@@ -277,7 +346,7 @@ fun WhiteNoiseApp() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(BgColor, Color(0xFF080E20), BgColor)))
+            .background(Brush.verticalGradient(listOf(c.bgColor, c.bgGradientMid, c.bgColor)))
             .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         Column(
@@ -288,9 +357,16 @@ fun WhiteNoiseApp() {
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Header
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("🌙  Lull", color = TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text("Sleep Sounds & White Noise", color = TextSecondary, fontSize = 13.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("🌙  Lull", color = c.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text("Sleep Sounds & White Noise", color = c.textSecondary, fontSize = 13.sp)
+                }
+                ThemeToggle(isDark = isDark, onToggle = onToggleTheme)
             }
 
             // Sound grid
@@ -318,17 +394,17 @@ fun WhiteNoiseApp() {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (volume < 0.1f) "🔇" else if (volume < 0.5f) "🔉" else "🔊", fontSize = 18.sp)
-                    Text("Volume", color = TextSecondary, fontSize = 13.sp)
+                    Text("Volume", color = c.textSecondary, fontSize = 13.sp)
                     Spacer(Modifier.weight(1f))
-                    Text("${(volume * 100).toInt()}%", color = AccentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("${(volume * 100).toInt()}%", color = c.accentColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
                 Slider(
                     value = volume,
                     onValueChange = { volume = it; engine.setVolume(it) },
                     colors = SliderDefaults.colors(
-                        thumbColor = AccentColor,
-                        activeTrackColor = AccentColor,
-                        inactiveTrackColor = SurfaceSelected
+                        thumbColor = c.accentColor,
+                        activeTrackColor = c.accentColor,
+                        inactiveTrackColor = c.surfaceSelected
                     )
                 )
             }
@@ -337,22 +413,22 @@ fun WhiteNoiseApp() {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("⏱", fontSize = 16.sp)
-                    Text("Sleep Timer", color = TextSecondary, fontSize = 13.sp)
+                    Text("Sleep Timer", color = c.textSecondary, fontSize = 13.sp)
                     if (isPlaying && remaining > 0) {
                         Spacer(Modifier.weight(1f))
                         Text(
                             formatRemaining(remaining),
-                            color = AccentColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                            color = c.accentColor, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TIMER_OPTIONS.forEach { min ->
-                        val selected = timerMin == min
+                        val isSelected = timerMin == min
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
-                                .background(if (selected) AccentColor else SurfaceColor)
+                                .background(if (isSelected) c.accentColor else c.surfaceColor)
                                 .clickable {
                                     timerMin = min
                                     remaining = if (isPlaying && min > 0) min * 60 else 0
@@ -362,9 +438,9 @@ fun WhiteNoiseApp() {
                         ) {
                             Text(
                                 if (min == 0) "Off" else if (min < 60) "${min}m" else "${min / 60}h",
-                                color = if (selected) Color.White else TextSecondary,
+                                color = if (isSelected) Color.White else c.textSecondary,
                                 fontSize = 12.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
@@ -379,9 +455,9 @@ fun WhiteNoiseApp() {
                         .clip(CircleShape)
                         .background(
                             if (isPlaying)
-                                Brush.radialGradient(listOf(AccentColor, AccentDark))
+                                Brush.radialGradient(listOf(c.accentColor, c.accentDark))
                             else
-                                Brush.radialGradient(listOf(SurfaceSelected, SurfaceColor))
+                                Brush.radialGradient(listOf(c.surfaceSelected, c.surfaceColor))
                         )
                         .clickable {
                             if (isPlaying) pause() else resume()
@@ -397,7 +473,7 @@ fun WhiteNoiseApp() {
                 val label = if (isPlaying) "Now playing: ${selected!!.label}" else "Paused: ${selected!!.label}"
                 Text(
                     label,
-                    color = if (isPlaying) AccentColor else TextSecondary,
+                    color = if (isPlaying) c.accentColor else c.textSecondary,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -417,12 +493,13 @@ fun SoundCard(
     isPlaying: Boolean,
     onClick: () -> Unit
 ) {
+    val c = LocalColors.current
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1.0f else 0.97f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
     )
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) SurfaceSelected else SurfaceColor,
+        targetValue = if (isSelected) c.surfaceSelected else c.surfaceColor,
         animationSpec = tween(200)
     )
 
@@ -432,7 +509,7 @@ fun SoundCard(
             .clip(RoundedCornerShape(20.dp))
             .background(bgColor)
             .then(
-                if (isSelected) Modifier.border(1.5.dp, BorderSelected.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
+                if (isSelected) Modifier.border(1.5.dp, c.borderSelected.copy(alpha = 0.7f), RoundedCornerShape(20.dp))
                 else Modifier
             )
             .clickable(onClick = onClick)
@@ -444,9 +521,9 @@ fun SoundCard(
                 Text(type.icon, fontSize = 28.sp)
                 if (isPlaying) AnimatedBars()
             }
-            Text(type.label, color = if (isSelected) TextPrimary else TextSecondary,
+            Text(type.label, color = if (isSelected) c.textPrimary else c.textSecondary,
                 fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal)
-            Text(type.description, color = TextSecondary, fontSize = 10.sp, lineHeight = 13.sp)
+            Text(type.description, color = c.textSecondary, fontSize = 10.sp, lineHeight = 13.sp)
         }
     }
 }
@@ -454,6 +531,7 @@ fun SoundCard(
 // ── Animated bars (playing indicator) ────────────────────────────────────
 @Composable
 fun AnimatedBars() {
+    val c = LocalColors.current
     val inf = rememberInfiniteTransition(label = "bars")
     val h1 by inf.animateFloat(0.3f, 1f, infiniteRepeatable(tween(600), RepeatMode.Reverse,
         StartOffset(0)), label = "b1")
@@ -473,7 +551,7 @@ fun AnimatedBars() {
                     .width(3.dp)
                     .fillMaxHeight(h)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(AccentColor)
+                    .background(c.accentColor)
             )
         }
     }
